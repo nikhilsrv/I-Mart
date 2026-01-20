@@ -1,2 +1,7 @@
 .env
 claude.md
+
+node_modules/
+dist/
+build/
+.vscode/
