@@ -5,3 +5,8 @@ node_modules/
 dist/
 build/
 .vscode/
+
+
+__pycache__/
+
+.venv
