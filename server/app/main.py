@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.lifespan import lifespan
+from core.lifespan import lifespan
 
 app = FastAPI(lifespan=lifespan)
 

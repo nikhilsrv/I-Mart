@@ -11,12 +11,12 @@ class Settings(BaseSettings):
     )
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ecommerce"
+    DATABASE_URL: str
 
     # App
-    APP_ENV: str = "development"
-    DEBUG: bool = True
-    SECRET_KEY: str = "changeme"
+    APP_ENV: str
+    DEBUG: bool
+    SECRET_KEY: str
 
 
 @lru_cache

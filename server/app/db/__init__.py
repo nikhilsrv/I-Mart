@@ -1,5 +1,5 @@
-from app.db.models.base import Base, BaseModel
-from app.db.session import AsyncSessionLocal, engine, get_db
+from db.models.base import Base, BaseModel
+from db.session import AsyncSessionLocal, engine, get_db
 
 __all__ = [
     "Base",
