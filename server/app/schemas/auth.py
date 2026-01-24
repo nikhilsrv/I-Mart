@@ -3,11 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr
 
 
-class GoogleLoginRequest(BaseModel):
-    code: str
-
-
-class GoogleSignupRequest(BaseModel):
+class GoogleAuthRequest(BaseModel):
     code: str
 
 

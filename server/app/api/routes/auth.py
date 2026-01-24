@@ -1,15 +1,10 @@
-from urllib.parse import urlencode
-
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import settings
 from db.session import get_db
 from schemas.auth import (
     AuthResponse,
-    GoogleLoginRequest,
-    GoogleSignupRequest,
+    GoogleAuthRequest,
     RefreshTokenRequest,
     TokenResponse,
     UserResponse,
@@ -19,70 +14,60 @@ from utils.cookies import set_refresh_token_cookie
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
-
-@router.get("/google/login")
-async def google_login():
-    """
-    Redirect to Google OAuth login page for existing users.
-    """
-    params = {
-        "client_id": settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "access_type": "offline",
-        "prompt": "consent",
-        "state": "login",
-    }
-    google_auth_url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
-    return RedirectResponse(url=google_auth_url)
-
-
-@router.get("/google/signup")
-async def google_signup():
-    """
-    Redirect to Google OAuth page for new user registration.
-    """
-    params = {
-        "client_id": settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "access_type": "offline",
-        "prompt": "consent",
-        "state": "signup",
-    }
-    google_auth_url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
-    return RedirectResponse(url=google_auth_url)
-
-
-@router.get("/google/callback")
-async def google_callback(
-    code: str,
-    state: str,
+@router.post("/google/login", response_model=AuthResponse)
+async def google_login(
+    request: GoogleAuthRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Handle Google OAuth callback.
-    This endpoint is called by Google after user authorizes.
-    Behavior depends on state: 'login' for existing users, 'signup' for new users.
+    Handle Google OAuth login for existing users.
+    Frontend sends the authorization code received from Google.
     """
-    if state not in ("login", "signup"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid state parameter",
-        )
-
     auth_service = AuthService(db)
 
     try:
-        if state == "login":
-            user, access_token, refresh_token = await auth_service.google_login(code)
-        else:
-            user, access_token, refresh_token = await auth_service.google_signup(code)
+        user, access_token, refresh_token = await auth_service.google_login(
+            request.code
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+    set_refresh_token_cookie(response, refresh_token)
+
+    return AuthResponse(
+        user=UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            role=user.role.value,
+        ),
+        tokens=TokenResponse(
+            access_token=access_token,
+        ),
+    )
+
+
+@router.post("/google/signup", response_model=AuthResponse)
+async def google_signup(
+    request: GoogleAuthRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Handle Google OAuth signup for new users.
+    Frontend sends the authorization code received from Google.
+    """
+    auth_service = AuthService(db)
+
+    try:
+        user, access_token, refresh_token = await auth_service.google_signup(
+            request.code
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

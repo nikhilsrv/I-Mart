@@ -1,9 +1,20 @@
 "use client";
 
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+
 export default function SignupPage() {
   const handleGoogleSignup = () => {
-    // TODO: Implement Google OAuth signup
-    console.log("Sign up with Google clicked");
+    const params = new URLSearchParams({
+      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+      redirect_uri: `${window.location.origin}/auth/callback`,
+      response_type: "code",
+      scope: "openid email profile",
+      access_type: "offline",
+      prompt: "consent",
+      state: "signup",
+    });
+
+    window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`;
   };
 
   return (

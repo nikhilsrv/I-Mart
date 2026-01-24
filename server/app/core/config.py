@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str 
 
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # JWT Settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 12
     REFRESH_TOKEN_EXPIRE_DAYS: int = 2
