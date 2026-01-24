@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     DEBUG: bool
     SECRET_KEY: str
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_REDIRECT_URI: str 
+
+    # JWT Settings
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 12
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 2
+
 
 @lru_cache
 def get_settings() -> Settings:
