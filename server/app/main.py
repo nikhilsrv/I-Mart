@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.router import router
 from core.lifespan import lifespan
+from core.logging import setup_logging
 
+setup_logging()
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
