@@ -39,11 +39,12 @@ async def get_all_products(
     limit: int = Query(20, ge=1, le=100, description="Number of products to return"),
     cursor: str | None = Query(None, description="Cursor for pagination"),
     category_id: uuid.UUID | None = Query(None, description="Filter by category ID"),
+    search: str | None = Query(None, description="Search products by name or description"),
 ):
     """
     Get all active products with cursor-based pagination and optional filtering.
     """
-    logger.info("Fetching products with limit=%d, cursor=%s", limit, cursor)
+    logger.info("Fetching products with limit=%d, cursor=%s, search=%s", limit, cursor, search)
 
     query = select(Product).where(
         Product.is_deleted == False,
@@ -52,6 +53,15 @@ async def get_all_products(
 
     if category_id is not None:
         query = query.where(Product.category_id == category_id)
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                Product.name.ilike(search_pattern),
+                Product.description.ilike(search_pattern),
+            )
+        )
 
     # Apply cursor filter if provided
     if cursor:
