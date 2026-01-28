@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface Product {
   id: string;
@@ -98,10 +99,23 @@ export default function ProductsPage() {
     }
   };
 
-  const calculateDiscount = (price: number, comparePrice: number | null) => {
-    if (!comparePrice || comparePrice <= price) return null;
-    return Math.round(((comparePrice - price) / comparePrice) * 100);
-  };
+  const calculateDiscount = useCallback(
+    (price: number, comparePrice: number | null) => {
+      if (!comparePrice || comparePrice <= price) return null;
+      return Math.round(((comparePrice - price) / comparePrice) * 100);
+    },
+    []
+  );
+
+  // Memoize product cards to prevent unnecessary re-renders
+  const productCards = useMemo(
+    () =>
+      products.map((product) => {
+        const discount = calculateDiscount(product.price, product.compare_price);
+        return { ...product, discount };
+      }),
+    [products, calculateDiscount]
+  );
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -225,12 +239,9 @@ export default function ProductsPage() {
           {/* Products Grid */}
           {!isLoading && !error && products.length > 0 && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                {products.map((product) => {
-                  const discount = calculateDiscount(
-                    product.price,
-                    product.compare_price
-                  );
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6" style={{ contentVisibility: 'auto' }}>
+                {productCards.map((product) => {
+                  const { discount } = product;
 
                   return (
                     <Link
@@ -240,10 +251,12 @@ export default function ProductsPage() {
                     >
                       <div className="relative aspect-square bg-gray-100 flex items-center justify-center">
                         {product.image_url ? (
-                          <img
+                          <Image
                             src={product.image_url}
                             alt={product.name}
-                            className="w-full h-full object-cover"
+                            fill
+                            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                            className="object-cover"
                           />
                         ) : (
                           <PackageIcon className="w-16 h-16 text-gray-300" />

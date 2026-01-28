@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db
@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 from schemas.auth import (
     AuthResponse,
     GoogleAuthRequest,
-    RefreshTokenRequest,
     TokenResponse,
     UserResponse,
 )
@@ -101,17 +100,25 @@ async def google_signup(
 
 @router.post("/refresh", response_model=AuthResponse)
 async def refresh_token(
-    request: RefreshTokenRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    refresh_token: str | None = Cookie(default=None),
 ):
     """
-    Refresh access token using refresh token.
+    Refresh access token using refresh token from cookie.
     """
     logger.info("Token refresh attempt started")
+
+    if refresh_token is None:
+        logger.warning("Token refresh failed: no refresh token in cookie")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found",
+        )
+
     auth_service = AuthService(db)
 
-    result = await auth_service.refresh_tokens(request.refresh_token)
+    result = await auth_service.refresh_tokens(refresh_token)
     if result is None:
         logger.warning("Token refresh failed: invalid or expired refresh token")
         raise HTTPException(

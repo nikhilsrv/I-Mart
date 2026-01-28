@@ -1,6 +1,8 @@
 import logging
 from uuid import UUID
 
+import bcrypt
+
 import httpx
 from jose import JWTError, jwt
 from sqlalchemy import select
@@ -74,9 +76,13 @@ class AuthService:
         logger.info("User created successfully: user_id=%s", user.id)
         return user
 
+    def _hash_token(self, token: str) -> str:
+        """Hash a token using bcrypt."""
+        return bcrypt.hashpw(token.encode(), bcrypt.gensalt(rounds=12)).decode()
+
     async def update_refresh_token(self, user: User, refresh_token: str) -> None:
-        """Update user's refresh token."""
-        user.refresh_token = refresh_token
+        """Update user's refresh token (stored as hash)."""
+        user.refresh_token = self._hash_token(refresh_token)
         await self.db.commit()
 
     def verify_token(self, token: str, token_type: str = "access") -> UUID | None:
@@ -158,7 +164,9 @@ class AuthService:
             return None
 
         user = await self.get_user_by_id(user_id)
-        if user is None or user.refresh_token != refresh_token:
+        if user is None or not bcrypt.checkpw(
+            refresh_token.encode(), user.refresh_token.encode()
+        ):
             logger.warning("Token refresh failed: user not found or token mismatch")
             return None
 

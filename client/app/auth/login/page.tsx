@@ -1,8 +1,21 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/app/stores/auth-store";
+
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/");
+    }
+  }, [isAuthenticated, router]);
+
   const handleGoogleLogin = () => {
     const params = new URLSearchParams({
       client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
@@ -16,6 +29,10 @@ export default function LoginPage() {
 
     window.location.href = `${GOOGLE_AUTH_URL}?${params.toString()}`;
   };
+
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
@@ -45,7 +62,7 @@ export default function LoginPage() {
         <span className="text-gray-700 font-medium">Login with Google</span>
       </button>
       <p className="mt-6 text-gray-600">
-        Don't have an account?{" "}
+        Don&apos;t have an account?{" "}
         <a href="/auth/signup" className="text-blue-600 hover:underline">
           Sign up
         </a>

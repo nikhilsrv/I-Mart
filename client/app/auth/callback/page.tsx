@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { googleLogin, googleSignup, AuthApiError } from "@/app/api/auth";
+import { useAuthStore } from "@/app/stores/auth-store";
 
 export default function CallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const setUser = useAuthStore((state) => state.setUser);
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -30,38 +33,24 @@ export default function CallbackPage() {
       }
 
       try {
-        const endpoint =
+        const data =
           state === "login"
-            ? `${process.env.NEXT_PUBLIC_API_URL}/auth/google/login`
-            : `${process.env.NEXT_PUBLIC_API_URL}/auth/google/signup`;
+            ? await googleLogin(code)
+            : await googleSignup(code);
 
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({ code }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.detail || "Authentication failed");
-        }
-
-        const data = await response.json();
-
-        localStorage.setItem("access_token", data.tokens.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-
+        setUser(data.user, data.tokens.access_token);
         router.push("/");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Authentication failed");
+        if (err instanceof AuthApiError) {
+          setError(err.message);
+        } else {
+          setError("Authentication failed");
+        }
       }
     };
 
     handleCallback();
-  }, [searchParams, router]);
+  }, [searchParams, router, setUser]);
 
   if (error) {
     return (
