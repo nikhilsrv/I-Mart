@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from uuid import UUID
 
@@ -77,8 +78,10 @@ class AuthService:
         return user
 
     def _hash_token(self, token: str) -> str:
-        """Hash a token using bcrypt."""
-        return bcrypt.hashpw(token.encode(), bcrypt.gensalt(rounds=12)).decode()
+        """Hash a token using bcrypt (with SHA-256 pre-hash for long tokens)."""
+        # SHA-256 first to get a fixed 64-char hex string (within bcrypt's 72-byte limit)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        return bcrypt.hashpw(token_hash.encode(), bcrypt.gensalt(rounds=12)).decode()
 
     async def update_refresh_token(self, user: User, refresh_token: str) -> None:
         """Update user's refresh token (stored as hash)."""
@@ -164,8 +167,10 @@ class AuthService:
             return None
 
         user = await self.get_user_by_id(user_id)
+        # SHA-256 first to match the hashing in _hash_token
+        token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
         if user is None or not bcrypt.checkpw(
-            refresh_token.encode(), user.refresh_token.encode()
+            token_hash.encode(), user.refresh_token.encode()
         ):
             logger.warning("Token refresh failed: user not found or token mismatch")
             return None

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { googleLogin, googleSignup, AuthApiError } from "@/app/api/auth";
 import { useAuthStore } from "@/app/stores/auth-store";
 
-export default function CallbackPage() {
+function CallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -67,5 +67,19 @@ export default function CallbackPage() {
     <div className="flex flex-col items-center justify-center min-h-screen">
       <div className="text-lg">Completing authentication...</div>
     </div>
+  );
+}
+
+export default function CallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          <div className="text-lg">Loading...</div>
+        </div>
+      }
+    >
+      <CallbackContent />
+    </Suspense>
   );
 }
