@@ -8,6 +8,15 @@ services:
     env_file:
       - ./server/.env
 
+  agent:
+    build: ./agent
+    ports:
+      - "8765:8765"
+    depends_on:
+      - app
+    env_file:
+      - ./agent/.env
+
   db:
     image: postgres:16
     ports:

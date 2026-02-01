@@ -1,32 +1,55 @@
 "use client";
 
 import { useState } from "react";
-
-type ConnectionStatus = "connecting" | "connected" | "error";
+import { useVoiceAgentWebSocket } from "@/app/hooks/useVoiceAgentWebSocket";
 
 export default function AgentWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>("connecting");
 
-  // Simulate connection after 2 seconds (replace with actual agent connection logic)
-  const handleOpen = () => {
+  const {
+    status,
+    isMuted,
+    connect,
+    disconnect,
+    toggleMute,
+    audioRef,
+  } = useVoiceAgentWebSocket({
+    endpoint: process.env.NEXT_PUBLIC_VOICE_AGENT_URL || "http://localhost:8765/connect",
+    onConnected: () => {
+      console.log("[AgentWidget] Connected to voice agent");
+    },
+    onDisconnected: () => {
+      console.log("[AgentWidget] Disconnected from voice agent");
+    },
+    onError: (error) => {
+      console.error("[AgentWidget] Error:", error);
+    },
+  });
+
+  // Connect when widget opens, disconnect when it closes
+  const handleOpen = async () => {
     setIsOpen(true);
-    setConnectionStatus("connecting");
-
-    // Simulate connection delay - replace with actual agent connection
-    setTimeout(() => {
-      setConnectionStatus("connected");
-    }, 2000);
+    // Wait for next tick to ensure audio element is mounted
+    await new Promise(resolve => setTimeout(resolve, 0));
+    connect();
   };
 
   const handleClose = () => {
+    disconnect();
     setIsOpen(false);
-    setConnectionStatus("connecting");
   };
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+      {/* Hidden audio element for agent voice playback - always present */}
+      <audio
+        ref={audioRef}
+        autoPlay
+        playsInline
+        muted={false}
+        className="hidden"
+      />
+
       {/* Chat Window */}
       {isOpen && (
         <div className="w-80 sm:w-96 h-[450px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
@@ -43,19 +66,21 @@ export default function AgentWidget() {
                 <div className="flex items-center gap-1.5">
                   <span
                     className={`w-2 h-2 rounded-full ${
-                      connectionStatus === "connected"
+                      status === "connected"
                         ? "bg-green-400"
-                        : connectionStatus === "connecting"
+                        : status === "connecting"
                           ? "bg-yellow-400 animate-pulse"
                           : "bg-red-400"
                     }`}
                   />
                   <span className="text-white/80 text-xs">
-                    {connectionStatus === "connected"
+                    {status === "connected"
                       ? "Connected"
-                      : connectionStatus === "connecting"
+                      : status === "connecting"
                         ? "Connecting..."
-                        : "Disconnected"}
+                        : status === "error"
+                          ? "Connection Failed"
+                          : "Disconnected"}
                   </span>
                 </div>
               </div>
@@ -70,31 +95,53 @@ export default function AgentWidget() {
 
           {/* Content Area */}
           <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50">
-            {connectionStatus === "connecting" ? (
+            {status === "connecting" || status === "idle" ? (
               <LoadingState />
-            ) : connectionStatus === "connected" ? (
-              <ConnectedState />
+            ) : status === "connected" ? (
+              <ConnectedState isMuted={isMuted} onToggleMute={toggleMute} />
             ) : (
-              <ErrorState onRetry={() => setConnectionStatus("connecting")} />
+              <ErrorState onRetry={connect} />
             )}
           </div>
 
           {/* Footer */}
           <div className="border-t border-gray-200 p-3 bg-white">
             <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-2.5">
-              <MicIcon
-                className={`w-5 h-5 ${
-                  connectionStatus === "connected"
-                    ? "text-indigo-600"
-                    : "text-gray-400"
+              <button
+                onClick={toggleMute}
+                disabled={status !== "connected"}
+                className={`p-1 rounded-full transition-colors ${
+                  status === "connected"
+                    ? isMuted
+                      ? "bg-red-100 text-red-600"
+                      : "hover:bg-indigo-100"
+                    : ""
                 }`}
-              />
+              >
+                {isMuted ? (
+                  <MicOffIcon
+                    className={`w-5 h-5 ${
+                      status === "connected" ? "text-red-600" : "text-gray-400"
+                    }`}
+                  />
+                ) : (
+                  <MicIcon
+                    className={`w-5 h-5 ${
+                      status === "connected"
+                        ? "text-indigo-600"
+                        : "text-gray-400"
+                    }`}
+                  />
+                )}
+              </button>
               <span className="text-gray-500 text-sm flex-1">
-                {connectionStatus === "connected"
-                  ? "Listening..."
+                {status === "connected"
+                  ? isMuted
+                    ? "Microphone muted"
+                    : "Listening..."
                   : "Waiting for connection..."}
               </span>
-              {connectionStatus === "connected" && (
+              {status === "connected" && !isMuted && (
                 <div className="flex gap-0.5">
                   <span className="w-1 h-4 bg-indigo-600 rounded-full animate-sound-wave-1" />
                   <span className="w-1 h-4 bg-indigo-600 rounded-full animate-sound-wave-2" />
@@ -145,42 +192,66 @@ function LoadingState() {
 }
 
 // Connected State Component
-function ConnectedState() {
+interface ConnectedStateProps {
+  isMuted: boolean;
+  onToggleMute: () => void;
+}
+
+function ConnectedState({ isMuted, onToggleMute }: ConnectedStateProps) {
   return (
     <div className="flex flex-col items-center gap-4 text-center">
       {/* Animated speaking indicator */}
       <div className="relative">
-        <div className="w-20 h-20 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center">
-          <AgentIcon className="w-10 h-10 text-white" />
-        </div>
-        {/* Pulse rings */}
-        <div className="absolute inset-0 w-20 h-20 bg-indigo-600/20 rounded-full animate-ping" />
-        <div
-          className="absolute inset-0 w-20 h-20 bg-indigo-600/10 rounded-full animate-pulse"
-          style={{ animationDelay: "0.5s" }}
-        />
+        <button
+          onClick={onToggleMute}
+          className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${
+            isMuted
+              ? "bg-gray-400"
+              : "bg-gradient-to-r from-indigo-600 to-purple-600"
+          }`}
+        >
+          {isMuted ? (
+            <MicOffIcon className="w-10 h-10 text-white" />
+          ) : (
+            <AgentIcon className="w-10 h-10 text-white" />
+          )}
+        </button>
+        {/* Pulse rings - only show when not muted */}
+        {!isMuted && (
+          <>
+            <div className="absolute inset-0 w-20 h-20 bg-indigo-600/20 rounded-full animate-ping" />
+            <div
+              className="absolute inset-0 w-20 h-20 bg-indigo-600/10 rounded-full animate-pulse"
+              style={{ animationDelay: "0.5s" }}
+            />
+          </>
+        )}
       </div>
 
       <div>
-        <p className="text-gray-700 font-medium">Assistant is ready</p>
+        <p className="text-gray-700 font-medium">
+          {isMuted ? "Microphone muted" : "Assistant is listening"}
+        </p>
         <p className="text-gray-500 text-sm mt-1">
-          How can I help you today?
+          {isMuted ? "Click to unmute and start speaking" : "How can I help you today?"}
         </p>
       </div>
 
-      {/* Sound wave visualization */}
-      <div className="flex items-end gap-1 h-8 mt-2">
-        {[...Array(12)].map((_, i) => (
-          <span
-            key={i}
-            className="w-1.5 bg-gradient-to-t from-indigo-600 to-purple-600 rounded-full animate-sound-bar"
-            style={{
-              animationDelay: `${i * 0.1}s`,
-              height: "8px",
-            }}
-          />
-        ))}
-      </div>
+      {/* Sound wave visualization - only show when not muted */}
+      {!isMuted && (
+        <div className="flex items-end gap-1 h-8 mt-2">
+          {[...Array(12)].map((_, i) => (
+            <span
+              key={i}
+              className="w-1.5 bg-gradient-to-t from-indigo-600 to-purple-600 rounded-full animate-sound-bar"
+              style={{
+                animationDelay: `${i * 0.1}s`,
+                height: "8px",
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -195,7 +266,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
       <div>
         <p className="text-gray-700 font-medium">Connection Failed</p>
         <p className="text-gray-500 text-sm mt-1">
-          Unable to connect to the assistant
+          Unable to connect to the assistant. Please check your microphone permissions.
         </p>
       </div>
       <button
@@ -260,6 +331,27 @@ function MicIcon({ className }: { className?: string }) {
     >
       <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" x2="12" y1="19" y2="22" />
+    </svg>
+  );
+}
+
+function MicOffIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="2" y1="2" x2="22" y2="22" />
+      <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2" />
+      <path d="M5 10v2a7 7 0 0 0 12 5" />
+      <path d="M15 9.34V5a3 3 0 0 0-5.68-1.33" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12" />
       <line x1="12" x2="12" y1="19" y2="22" />
     </svg>
   );

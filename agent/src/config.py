@@ -10,8 +10,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # OpenAI
-    OPENAI_API_KEY: str
+    # Google Gemini
+    GOOGLE_API_KEY: str
 
     # Deepgram
     DEEPGRAM_API_KEY: str

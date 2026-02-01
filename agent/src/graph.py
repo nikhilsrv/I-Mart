@@ -2,7 +2,7 @@
 LangGraph agent for I-Mart voice assistant.
 """
 
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
@@ -15,11 +15,12 @@ def create_agent():
     """Create and return the LangGraph agent."""
 
     # Initialize the LLM
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        api_key=settings.OPENAI_API_KEY,
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-3-flash-preview",
+        google_api_key=settings.GOOGLE_API_KEY,
         temperature=0.7,
-        max_tokens=256,  # Keep responses concise for voice
+        max_output_tokens=256,  # Keep responses concise for voice
+        convert_system_message_to_human=True,  # Required for gemini models
     )
 
     # Create memory for conversation persistence
@@ -30,7 +31,6 @@ def create_agent():
         model=llm,
         tools=ALL_TOOLS,
         checkpointer=memory,
-        state_modifier=SYSTEM_PROMPT,
     )
 
     return agent
@@ -63,14 +63,39 @@ async def process_message(message: str, session_id: str) -> str:
 
     config = {"configurable": {"thread_id": session_id}}
 
-    result = await agent.ainvoke(
-        {"messages": [("user", message)]},
-        config=config,
-    )
+    # Get current state to check if this is the first message
+    state = await agent.aget_state(config)
+
+    # Add system prompt only for the first message in a thread
+    if not state.values.get("messages"):
+        result = await agent.ainvoke(
+            {"messages": [("system", SYSTEM_PROMPT), ("user", message)]},
+            config=config,
+        )
+    else:
+        result = await agent.ainvoke(
+            {"messages": [("user", message)]},
+            config=config,
+        )
 
     # Extract the last AI message
     ai_messages = [m for m in result["messages"] if m.type == "ai"]
     if ai_messages:
-        return ai_messages[-1].content
+        content = ai_messages[-1].content
+
+        # Handle both string content and structured content (list of blocks)
+        if isinstance(content, str):
+            return content
+        elif isinstance(content, list):
+            # Extract text from content blocks
+            text_parts = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text_parts.append(block.get("text", ""))
+                elif isinstance(block, str):
+                    text_parts.append(block)
+            return " ".join(text_parts).strip()
+        else:
+            return str(content)
 
     return "I'm sorry, I didn't understand that. Could you please repeat?"

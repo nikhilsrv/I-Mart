@@ -2,13 +2,11 @@
 name = "voice-agent"
 version = "0.1.0"
 description = "Voice agent for I-Mart using Pipecat and LangGraph"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "pipecat-ai[deepgram,openai,silero]>=0.0.54",
-    "aiortc>=1.9.0",
+    "pipecat-ai[deepgram,openai,silero]>=0.0.99",
     "langgraph>=0.2.0",
-    "langchain-openai>=0.2.0",
+    "langchain-google-genai>=2.0.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
     "websockets>=13.0",
@@ -21,3 +19,6 @@ dependencies = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

@@ -62,7 +62,7 @@ export default function ProductsPage() {
         if (debouncedSearch) params.set("search", debouncedSearch);
 
         const response = await fetch(
-          `${API_BASE_URL}/api/products?${params.toString()}`
+          `${API_BASE_URL}/products?${params.toString()}`
         );
 
         if (!response.ok) {

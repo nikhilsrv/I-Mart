@@ -1,19 +1,24 @@
 """
-FastAPI server for WebRTC signaling.
-Handles SDP offer/answer and ICE candidate exchange.
+FastAPI server for WebSocket audio streaming.
+Handles bidirectional audio communication with voice agent.
+
+This implementation follows the Pipecat reference architecture from websocket/server/server.py
 """
 
 import asyncio
-import json
 import logging
-import uuid
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import settings
-from src.transport import get_connection, remove_connection
+from src.bot import run_bot
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="I-Mart Voice Agent")
@@ -33,98 +38,49 @@ async def health_check():
     return {"status": "healthy", "service": "voice-agent"}
 
 
-@app.websocket("/ws/signaling/{session_id}")
-async def signaling_endpoint(websocket: WebSocket, session_id: str | None = None):
+@app.post("/connect")
+async def bot_connect(request: Request):
     """
-    WebSocket endpoint for WebRTC signaling.
+    RTVI-compatible connect endpoint.
+    Returns WebSocket URL for client connection.
 
-    Protocol:
-    1. Client connects
-    2. Client sends: {"type": "offer", "sdp": "..."}
-    3. Server responds: {"type": "answer", "sdp": "..."}
-    4. Both exchange: {"type": "ice-candidate", "candidate": {...}}
-    5. WebRTC connection established
-    6. WebSocket can close (or stay open for ICE trickling)
+    This endpoint is called by PipecatClient to get the WebSocket URL.
+    """
+    ws_url = f"ws://{settings.HOST}:{settings.PORT}/ws"
+    logger.info(f"Connect request, returning ws_url: {ws_url}")
+    return {"ws_url": ws_url}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    RTVI-compatible WebSocket endpoint.
+
+    Follows the reference implementation pattern:
+    1. Accept the WebSocket connection
+    2. Pass the raw websocket to run_bot
+    3. run_bot creates the transport internally
     """
     await websocket.accept()
-
-    # Generate session ID if not provided
-    if not session_id:
-        session_id = str(uuid.uuid4())
-
-    logger.info(f"New signaling connection: {session_id}")
-
-    connection = get_connection(session_id)
+    logger.info("WebSocket connection accepted")
 
     try:
-        # Send session ID to client
-        await websocket.send_json({
-            "type": "session",
-            "session_id": session_id,
-        })
-
-        while True:
-            # Receive message from client
-            data = await websocket.receive_json()
-            msg_type = data.get("type")
-
-            if msg_type == "offer":
-                # Handle SDP offer
-                logger.info(f"Received offer from {session_id}")
-
-                answer = await connection.handle_offer(
-                    sdp=data["sdp"],
-                    type_="offer",
-                )
-
-                await websocket.send_json({
-                    "type": "answer",
-                    "sdp": answer.sdp,
-                })
-
-                # Send any gathered ICE candidates
-                if connection.pc:
-                    @connection.pc.on("icecandidate")
-                    async def on_ice_candidate(candidate):
-                        if candidate:
-                            await websocket.send_json({
-                                "type": "ice-candidate",
-                                "candidate": {
-                                    "candidate": candidate.candidate,
-                                    "sdpMid": candidate.sdpMid,
-                                    "sdpMLineIndex": candidate.sdpMLineIndex,
-                                },
-                            })
-
-            elif msg_type == "ice-candidate":
-                # Handle ICE candidate from client
-                candidate = data.get("candidate")
-                if candidate:
-                    await connection.add_ice_candidate(candidate)
-
-            elif msg_type == "close":
-                # Client requested close
-                logger.info(f"Client requested close: {session_id}")
-                break
-
-    except WebSocketDisconnect:
-        logger.info(f"Signaling disconnected: {session_id}")
-
+        await run_bot(websocket)
     except Exception as e:
-        logger.error(f"Signaling error for {session_id}: {e}")
-
-    finally:
-        # Note: Don't remove connection here, WebRTC might still be active
-        # Connection cleanup happens when WebRTC disconnects
-        pass
-
+        logger.error(f"Exception in run_bot: {e}", exc_info=True)
 
 
 @app.on_event("shutdown")
 async def shutdown():
     """Cleanup on server shutdown."""
     logger.info("Shutting down voice agent server...")
-    # Close all active connections
-    from src.transport import connections
-    for session_id in list(connections.keys()):
-        await remove_connection(session_id)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        app,
+        host=settings.HOST,
+        port=settings.PORT,
+        log_level="info",
+    )
